@@ -35,7 +35,7 @@
   </option>
 </select> -->
 
-      <canvas id="diagnosisChart"></canvas>
+      <canvas id="diagnosisChart" v-if="selectedPatient"></canvas>
 
       <div>
     <!-- Patient Diagnosis Stats -->
@@ -177,13 +177,12 @@ export default {
       selectedPatient: null, // Current selected patient
       filteredDiagnosisHistory: [],
       selectedPoint: null, // Store the selected point index
-      chart: null, // Store the chart instance
       selectedMonth: '', // Store selected month
-    last6Months: [], // Store the last 6 months
+    // last6Months: [], // Store the last 6 months
     };
   },
   created() {
-  this.calculateLast6Months();
+  // this.calculateLast6Months();
   this.renderDiagnosisChart(); // Initial rendering
 },
   computed: {
@@ -223,76 +222,77 @@ export default {
     selectPatient(patient) {
       this.selectedPatient = patient; // Set the selected patient
       this.renderDiagnosisChart(); // Render chart when patient is selected
-    },
-    calculateLast6Months() {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-
-    const now = new Date();
-    const last6Months = [];
-
-    for (let i = 0; i < 6; i++) {
-      const month = new Date();
-      month.setMonth(now.getMonth() - i);
-      last6Months.push({
-        label: `${months[month.getMonth()]} ${month.getFullYear()}`,
-        value: `${months[month.getMonth()]} ${month.getFullYear()}`,
-      });
+      if (this.chart) {
+      this.chart.destroy();
+      this.chart = null; // Clear the chart instance
     }
-
-    this.last6Months = last6Months.reverse(); // Ensure months are in the correct order
-    this.selectedMonth = this.last6Months[0].value; // Set the default selected month
-  },
-
-  // Filter the diagnosis history based on the selected month
-  applyMonthFilter() {
-    // Filter the diagnosis history based on the selected month
-    this.filteredDiagnosisHistory = this.selectedPatient.diagnosis_history.filter(diagnosis => {
-      const diagnosisMonthYear = `${diagnosis.month} ${diagnosis.year}`;
-      return diagnosisMonthYear === this.selectedMonth;
+    
+    this.$nextTick(() => {
+      this.renderDiagnosisChart();
     });
-    this.renderDiagnosisChart();
   },
+  //   calculateLast6Months() {
+  //   const months = [
+  //     'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'
+  //   ];
+
+  //   const now = new Date();
+  //   const last6Months = [];
+
+  //   for (let i = 0; i < 6; i++) {
+  //     const month = new Date();
+  //     month.setMonth(now.getMonth() - i);
+  //     last6Months.push({
+  //       label: `${months[month.getMonth()]} ${month.getFullYear()}`,
+  //       value: `${months[month.getMonth()]} ${month.getFullYear()}`,
+  //     });
+  //   }
+
+  //   this.last6Months = last6Months.reverse(); // Ensure months are in the correct order
+  //   this.selectedMonth = this.last6Months[0].value; // Set the default selected month
+  // },
+
+  // // Filter the diagnosis history based on the selected month
+  // applyMonthFilter() {
+  //   // Filter the diagnosis history based on the selected month
+  //   this.filteredDiagnosisHistory = this.selectedPatient.diagnosis_history.filter(diagnosis => {
+  //     const diagnosisMonthYear = `${diagnosis.month} ${diagnosis.year}`;
+  //     return diagnosisMonthYear === this.selectedMonth;
+  //   });
+  //   this.renderDiagnosisChart();
+  // },
 
   renderDiagnosisChart() {
-    this.$nextTick(() => {
-      if (this.selectedPatient && this.selectedPatient.diagnosis_history && this.selectedPatient.diagnosis_history.length > 0) {
-        // Use the filtered diagnosis history to generate chart data
-        const filteredDiagnosisHistory = this.filteredDiagnosisHistory.length > 0 ? this.filteredDiagnosisHistory : this.selectedPatient.diagnosis_history;
+    if (!this.selectedPatient || !this.selectedPatient.diagnosis_history?.length) {
+      console.error('No patient data available for the chart');
+      return;
+    }
 
-        // Limit to the last 6 months
-        const last6DiagnosisHistory = filteredDiagnosisHistory.slice(-6);
+    const diagnosisHistory = this.selectedPatient.diagnosis_history;
 
-        // Extract data for heartRates, respiratoryRates, and temperatures
-        const heartRates = last6DiagnosisHistory.map(diagnosis => diagnosis.heart_rate.value || 0);
-        const respiratoryRates = last6DiagnosisHistory.map(diagnosis => diagnosis.respiratory_rate.value || 0);
-        const temperatures = last6DiagnosisHistory.map(diagnosis => diagnosis.temperature.value || 0);
+    const labels = this.selectedPatient.diagnosis_history.map(diagnosis => {
+    const month = new Date(`${diagnosis.month} 1, ${diagnosis.year}`).toLocaleString('en-US', {
+      month: 'short',
+      year: 'numeric',
+    });
+    return month;
+  });
+            const heartRates = diagnosisHistory.map(diagnosis => diagnosis.heart_rate.value || 0);
+    const respiratoryRates = diagnosisHistory.map(diagnosis => diagnosis.respiratory_rate.value || 0);
+    const temperatures = diagnosisHistory.map(diagnosis => diagnosis.temperature.value || 0);
 
-        // Format the labels to be "MMM. YYYY"
-        const labels = last6DiagnosisHistory.map(diagnosis => {
-          const month = new Date(`${diagnosis.month} 1, ${diagnosis.year}`).toLocaleString('en-US', { month: 'short', year: 'numeric' });
-          return month;
-        });
+    const canvasElement = document.getElementById('diagnosisChart');
+    if (!canvasElement) {
+      console.error('Canvas element not found');
+      return;
+    }
 
-        const canvasElement = document.getElementById('diagnosisChart');
-        if (!canvasElement) {
-          console.error('Canvas element not found');
-          return;
-        }
-
-        const ctx = canvasElement.getContext('2d');
-        if (!ctx) {
-          console.error('Canvas context could not be obtained');
-          return;
-        }
-
-        // Destroy the previous chart to avoid conflicts
-        if (this.chart) {
-          this.chart.destroy();
-        }
-
-        Chart.register(
+    const ctx = canvasElement.getContext('2d');
+    if (!ctx) {
+      console.error('Canvas context could not be obtained');
+      return;
+    }
+    Chart.register(
         LineController, 
         LineElement, 
         CategoryScale, 
@@ -302,36 +302,41 @@ export default {
         Tooltip, 
         Legend
       );
-        // Create the chart
-        this.chart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: 'Heart Rate (bpm)',
-                data: heartRates,
-                borderColor: 'pink',
-                backgroundColor: 'rgba(255, 105, 180, 0.5)',
-                fill: true,
-              },
-              {
-                label: 'Respiratory Rate (breaths/min)',
-                data: respiratoryRates,
-                borderColor: 'green',
-                backgroundColor: 'rgba(0, 255, 0, 0.5)',
-                fill: true,
-              },
-              {
-                label: 'Temperature (°F)',
-                data: temperatures,
-                borderColor: 'red',
-                backgroundColor: 'rgba(255, 0, 0, 0.5)',
-                fill: true,
-              }
-            ],
+
+      if (this.chart) {
+      this.chart.destroy();
+      this.chart = ''; // Clear the chart instance
+    }
+
+    this.chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Heart Rate (bpm)',
+            data: heartRates,
+            borderColor: 'pink',
+            backgroundColor: 'rgba(255, 105, 180, 0.5)',
+            fill: true,
           },
-          options: {
+          {
+            label: 'Respiratory Rate (breaths/min)',
+            data: respiratoryRates,
+            borderColor: 'green',
+            backgroundColor: 'rgba(0, 255, 0, 0.5)',
+            fill: true,
+          },
+          {
+            label: 'Temperature (°F)',
+            data: temperatures,
+            borderColor: 'red',
+            backgroundColor: 'rgba(255, 0, 0, 0.5)',
+            fill: true,
+          },
+        ],
+      },
+      options: {
             responsive: true,
             plugins: {
               title: {
@@ -373,10 +378,8 @@ export default {
             },
                     },
         });
-      }
-    });
-  },
-    getDiagnosisHistory() {
+      },
+        getDiagnosisHistory() {
       return this.selectedPatient && this.selectedPatient.diagnosis_history ? this.selectedPatient.diagnosis_history : [];
     },
   },
